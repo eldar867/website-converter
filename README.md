@@ -1,21 +1,16 @@
-# Chrome Extension Boilerplate built with React + Parcel
-Source code of article which is published in Medium, you can read it from:
-https://medium.freecodecamp.org/building-chrome-extensions-in-react-parcel-79d0240dd58f
+# React + Vite
 
-# CLI Commands
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## Development
+Currently, two official plugins are available:
 
-```Shell
-npm run watch
-```
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
-Starts the watcher for building project when a file changed.
+## React Compiler
 
-## Building
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-```Shell
-npm run build
-```
+## Expanding the ESLint configuration
 
-Preps your app for deployment. Minifies all files, piping them to the `src/build` folder.
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
