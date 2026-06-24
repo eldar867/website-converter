@@ -13,19 +13,27 @@ function AuthForm({ onLogin }) {
     setError('')
     setLoading(true)
 
+    console.log('Submitting:', { email, isRegister })
+
     try {
       const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login'
       const response = await axios.post(endpoint, { email, password })
 
+      console.log('Response:', response.data)
+
       if (isRegister) {
         alert('Регистрация успешна! Теперь войдите.')
         setIsRegister(false)
+        setEmail('')
+        setPassword('')
       } else {
         localStorage.setItem('token', response.data.token)
         onLogin(response.data.token, response.data.user)
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Ошибка авторизации')
+      console.error('Auth error:', err)
+      const errorMessage = err.response?.data?.error || err.message || 'Ошибка авторизации'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -49,6 +57,7 @@ function AuthForm({ onLogin }) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            disabled={loading}
           />
           <input
             type="password"
@@ -56,6 +65,7 @@ function AuthForm({ onLogin }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            disabled={loading}
           />
           {error && <div className="error">{error}</div>}
           <button type="submit" disabled={loading}>
@@ -65,7 +75,7 @@ function AuthForm({ onLogin }) {
         
         <p>
           {isRegister ? 'Уже есть аккаунт?' : 'Нет аккаунта?'}
-          <button onClick={toggleMode}>
+          <button onClick={toggleMode} disabled={loading}>
             {isRegister ? 'Войти' : 'Зарегистрироваться'}
           </button>
         </p>
