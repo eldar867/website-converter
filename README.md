@@ -1,4 +1,4 @@
-# 🌐 Website Converter
+# Website Converter
 
 [![Maintainability](https://qlty.sh/gh/eldar867/projects/website-converter/maintainability.svg)](https://qlty.sh/gh/eldar867/projects/website-converter)
 
