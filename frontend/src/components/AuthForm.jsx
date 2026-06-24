@@ -13,28 +13,28 @@ function AuthForm({ onLogin }) {
     setError('')
     setLoading(true)
 
-    console.log('Submitting:', { email, isRegister })
-
     try {
       const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login'
       const response = await axios.post(endpoint, { email, password })
-
-      console.log('Response:', response.data)
 
       if (isRegister) {
         alert('Регистрация успешна! Теперь войдите.')
         setIsRegister(false)
         setEmail('')
         setPassword('')
+        setLoading(false)
       } else {
+        // Сохраняем токен
         localStorage.setItem('token', response.data.token)
+        
+        // Вызываем onLogin для обновления состояния в App
         onLogin(response.data.token, response.data.user)
+        
+        // Принудительный редирект на /convert
+        window.location.href = '/convert'
       }
     } catch (err) {
-      console.error('Auth error:', err)
-      const errorMessage = err.response?.data?.error || err.message || 'Ошибка авторизации'
-      setError(errorMessage)
-    } finally {
+      setError(err.response?.data?.error || 'Ошибка авторизации')
       setLoading(false)
     }
   }
