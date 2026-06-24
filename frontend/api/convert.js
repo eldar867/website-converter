@@ -3,10 +3,100 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import jwt from 'jsonwebtoken';
 
-export default async function handler(req, res) {
+const setCorsHeaders = (res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+};
+
+const validateToken = (req) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return null;
+  
+  const token = authHeader.split(' ')[1];
+  if (!token) return null;
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    return decoded.userId;
+  } catch (err) {
+    return null;
+  }
+};
+
+const fetchWebsiteHtml = async (url) => {
+  const response = await axios.get(url, {
+    timeout: 10000,
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+  });
+  return response.data;
+};
+
+const parseWebsiteData = (html, url) => {
+  const $ = cheerio.load(html);
+  
+  return {
+    url: url,
+    title: $('title').text().trim(),
+    description: $('meta[name="description"]').attr('content') || '',
+    headings: {
+      h1: $('h1').map((i, el) => $(el).text().trim()).get(),
+      h2: $('h2').map((i, el) => $(el).text().trim()).get()
+    },
+    links: $('a').map((i, el) => ({
+      text: $(el).text().trim(),
+      href: $(el).attr('href')
+    })).get().filter(link => link.text && link.href).slice(0, 20)
+  };
+};
+
+const saveToDatabase = async (userId, url, format, data) => {
+  await sql`
+    INSERT INTO conversions (user_id, url, format, result, created_at)
+    VALUES (${userId}, ${url}, ${format}, ${JSON.stringify(data)}, NOW())
+  `;
+};
+
+const formatAsJson = (data) => data;
+
+const formatAsCsv = (data) => {
+  let csv = 'Type,Content,Href\n';
+  data.headings.h1.forEach(h => { 
+    csv += `H1,"${h.replace(/"/g, '""')}",\n`; 
+  });
+  data.links.forEach(l => { 
+    csv += `Link,"${l.text.replace(/"/g, '""')}","${l.href}"\n`; 
+  });
+  return csv;
+};
+
+const formatAsXml = (data) => {
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<website>\n';
+  xml += `  <title>${data.title}</title>\n`;
+  data.links.forEach(l => { 
+    xml += `    <link href="${l.href}">${l.text}</link>\n`; 
+  });
+  xml += `</website>`;
+  return xml;
+};
+
+const sendFormattedResponse = (res, format, data) => {
+  if (format === 'json') {
+    return res.status(200).json(formatAsJson(data));
+  }
+  if (format === 'csv') {
+    res.setHeader('Content-Type', 'text/csv');
+    return res.status(200).send(formatAsCsv(data));
+  }
+  if (format === 'xml') {
+    res.setHeader('Content-Type', 'application/xml');
+    return res.status(200).send(formatAsXml(data));
+  }
+};
+
+
+export default async function handler(req, res) {
+  setCorsHeaders(res);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -17,67 +107,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
+    const userId = validateToken(req);
+    if (!userId) {
       return res.status(401).json({ error: 'Требуется авторизация' });
     }
 
-    let userId;
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      userId = decoded.userId;
-    } catch (err) {
-      return res.status(401).json({ error: 'Неверный токен' });
-    }
-
     const { url, format } = req.body;
-
     if (!url) {
       return res.status(400).json({ error: 'URL обязателен' });
     }
 
-    const response = await axios.get(url, {
-      timeout: 10000,
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-    });
-
-    const $ = cheerio.load(response.data);
-
-    const data = {
-      url: url,
-      title: $('title').text().trim(),
-      description: $('meta[name="description"]').attr('content') || '',
-      headings: {
-        h1: $('h1').map((i, el) => $(el).text().trim()).get(),
-        h2: $('h2').map((i, el) => $(el).text().trim()).get()
-      },
-      links: $('a').map((i, el) => ({
-        text: $(el).text().trim(),
-        href: $(el).attr('href')
-      })).get().filter(link => link.text && link.href).slice(0, 20)
-    };
-
-    await sql`
-      INSERT INTO conversions (user_id, url, format, result, created_at)
-      VALUES (${userId}, ${url}, ${format}, ${JSON.stringify(data)}, NOW())
-    `;
-
-    if (format === 'json') {
-      return res.status(200).json(data);
-    } else if (format === 'csv') {
-      let csv = 'Type,Content,Href\n';
-      data.headings.h1.forEach(h => { csv += `H1,"${h.replace(/"/g, '""')}",\n`; });
-      data.links.forEach(l => { csv += `Link,"${l.text.replace(/"/g, '""')}","${l.href}"\n`; });
-      res.setHeader('Content-Type', 'text/csv');
-      return res.status(200).send(csv);
-    } else if (format === 'xml') {
-      let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<website>\n';
-      xml += `  <title>${data.title}</title>\n`;
-      data.links.forEach(l => { xml += `    <link href="${l.href}">${l.text}</link>\n`; });
-      xml += `</website>`;
-      res.setHeader('Content-Type', 'application/xml');
-      return res.status(200).send(xml);
-    }
+    const html = await fetchWebsiteHtml(url);
+    const data = parseWebsiteData(html, url);
+    await saveToDatabase(userId, url, format, data);
+    
+    return sendFormattedResponse(res, format, data);
 
   } catch (error) {
     console.error('Convert error:', error);
